@@ -1,0 +1,79 @@
+﻿const float M_2PI = 3.14159265 * 2;
+
+struct Wave{
+	float3 pos;
+	float phase;
+};
+
+RWStructuredBuffer<Wave> wavesBuffer;
+RWStructuredBuffer<Wave> wavesUpdateBuffer;
+RWStructuredBuffer<float3> surfersBuffer;
+
+float waveSpeed;
+float framePeriod;
+uint oscillatorsCount;
+uint wavesCount;
+uint curWaveIndex;
+
+#pragma kernel wavesUpdate
+[numthreads(1,1,1)]
+void wavesUpdate (uint id : SV_DispatchThreadID)
+{
+	wavesBuffer[id * wavesCount + curWaveIndex] = wavesUpdateBuffer[id];
+}
+
+float3 calcIncline(float3 worldPos)
+{
+	float frameRadius = waveSpeed * framePeriod;
+	float maxRadius = frameRadius * (wavesCount - 1);
+	float3 result = 0;
+	uint interacted = 0;
+	for (uint i = 0; i < oscillatorsCount; i++)
+	{
+		uint interaction = 0;
+		uint oscRow = i * wavesCount;
+		float curRadius = maxRadius - frameRadius;
+		Wave prevWave = wavesBuffer[oscRow + curWaveIndex];
+		//prevWave.phase = 0;
+		float prevDist = curRadius - distance(worldPos, prevWave.pos);
+		for (uint j = 1; j < wavesCount; j++)
+		{
+			curRadius -= frameRadius;
+			Wave nextWave = wavesBuffer[oscRow + (curWaveIndex + j) % wavesCount];
+			float dist = distance(worldPos, nextWave.pos);
+			float nextDist = curRadius - dist;
+
+			if (nextDist*prevDist <= 0 && (nextWave.phase - prevWave.phase) != 0)
+			{
+				interaction = 1;
+				float k = abs(nextDist) / (abs(nextDist) + abs(prevDist));
+				float3 wavePos = lerp(nextWave.pos, prevWave.pos, k);
+				float wavePhase = frac(lerp(nextWave.phase, prevWave.phase, k));
+				float phaseQuarter = floor(wavePhase * 4.0f);
+				float phaseOffset = wavePhase - (phaseQuarter + phaseQuarter % 2) / 4;
+				float phaseScale = (prevDist - nextDist) / (nextWave.phase - prevWave.phase);
+				//float phaseScale = frameRadius / (nextWave.phase - prevWave.phase);
+				float waveFrequency = (nextWave.phase - prevWave.phase) / framePeriod;
+				float3 dir = worldPos - wavePos;
+				if (length(dir) > 0)
+					result += /*abs(cos(wavePhase * 3.14159265 * 2)) * */phaseOffset * phaseScale * normalize(dir);
+					//result += sign(phaseOffset) * abs(sin(wavePhase * 6.28)) * waveFrequency * normalize(dir);
+			}
+			prevWave = nextWave;
+			prevDist = nextDist;
+		}
+		interacted += interaction;
+	}
+
+	return result;// * (interacted == oscillatorsCount);
+}
+
+
+#pragma kernel surfersUpdate
+[numthreads(1,1,1)]
+void surfersUpdate (uint id : SV_DispatchThreadID)
+{
+	float3 worldPos = surfersBuffer[id];
+	worldPos += calcIncline(worldPos);
+	surfersBuffer[id] = worldPos;
+}
