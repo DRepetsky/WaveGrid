@@ -66,9 +66,9 @@ Shader "WaveGrid/GridOnSurface" {
 				result = result / (oscillatorsCount + 1);
 				float positive = sqrt((abs(result) + result) / 2.0f);
 				float negative = sqrt((abs(result) - result) / 2.0f);
-				float node = (0.05 - abs(result)) * 20;
-
+				float node = (0.1 - abs(result)) * 10;
 				return float4(positive, node, negative, 1);
+
 				//return float4(abs(result), pow(1-abs(result), 6), sqrt(abs(result)), 1);
 				//return float4((float3)sqrt(abs(result)), 1);
             }
